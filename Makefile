@@ -66,7 +66,7 @@ kind: images
 all: build images
 
 publish: # @HELP publish version on github and dockerhub
-	./../build-tools/publish-version ${VERSION} onosproject/onos-o1tt
+	./../build-tools/publish-version ${VERSION} onosproject/onos-o1t
 
 bumponosdeps: # @HELP update "onosproject" go dependencies and push patch to git. Add a version to dependency to make it different to $VERSION
 	./../build-tools/bump-onos-deps ${VERSION}
