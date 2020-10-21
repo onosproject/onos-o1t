@@ -29,6 +29,9 @@ func main() {
 	}
 
 	err = startServer(*caPath, *keyPath, *certPath)
+	if err != nil {
+		log.Fatal("Unable to start onos-o1t ", err)
+	}
 
 }
 
