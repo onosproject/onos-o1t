@@ -53,19 +53,12 @@ protos: # @HELP compile the protobuf files (using protoc-go Docker)
 		--entrypoint build/bin/compile-protos.sh \
 		onosproject/protoc-go:${ONOS_PROTOC_VERSION}
 
-onos-o1t-base-docker: # @HELP build onos-o1t base Docker image
-	@go mod vendor
-	docker build . -f build/base/Dockerfile \
-		--build-arg ONOS_BUILD_VERSION=${ONOS_BUILD_VERSION} \
-		--build-arg ONOS_MAKE_TARGET=build \
-		-t onosproject/onos-o1t-base:${ONOS_O1T_VERSION}
-	@rm -rf vendor
-
 onos-o1t-docker: # @HELP build onos-o1t Docker image
-onos-o1t-docker: onos-o1t-base-docker
+onos-o1t-docker:
+	@go mod vendor
 	docker build . -f build/onos-o1t/Dockerfile \
-		--build-arg ONOS_O1T_BASE_VERSION=${ONOS_O1T_VERSION} \
 		-t onosproject/onos-o1t:${ONOS_O1T_VERSION}
+	@rm -rf vendor
 
 images: # @HELP build all Docker images
 images: build onos-o1t-docker
