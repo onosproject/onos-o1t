@@ -83,7 +83,11 @@ func NewO1Controller(confStore store.Store, rnibClient rnib.TopoClient, gnmiClie
 		GnmiTimeout:  3 * time.Second,
 	}
 
-	o1t.Capabilities()
+	_, err := o1t.Capabilities()
+	if err != nil {
+		log.Warn(err)
+	}
+
 	return o1t
 }
 

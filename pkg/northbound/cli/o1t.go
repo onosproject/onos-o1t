@@ -7,7 +7,6 @@ package cli
 import (
 	"time"
 
-	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-o1t/pkg/controller"
 	"github.com/onosproject/onos-o1t/pkg/rnib"
 	"github.com/onosproject/onos-o1t/pkg/store"
@@ -18,7 +17,7 @@ import (
 
 const TimeoutTimer = time.Second * 5
 
-var log = logging.GetLogger()
+// var log = logging.GetLogger()
 
 // NewService returns a new A1T interface service.
 func NewService(confStore store.Store, controllerBroker controller.O1Controller, rnibClient rnib.TopoClient) service.Service {
@@ -48,7 +47,7 @@ func (s Service) Register(r *grpc.Server) {
 }
 
 type Server struct {
-	confStore  store.Store
-	rnibClient rnib.TopoClient
-	ctrl       controller.O1Controller
+	// confStore  store.Store
+	// rnibClient rnib.TopoClient
+	// ctrl       controller.O1Controller
 }

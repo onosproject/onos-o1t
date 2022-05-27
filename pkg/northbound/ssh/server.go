@@ -267,7 +267,10 @@ func (srv *sshServer) handleServerConn(ctx Context, chans <-chan ssh.NewChannel)
 		log.Infof("Handling Channel %s", newChan.ChannelType())
 
 		if newChan.ChannelType() != "session" {
-			newChan.Reject(ssh.UnknownChannelType, "unknown channel type")
+			err := newChan.Reject(ssh.UnknownChannelType, "unknown channel type")
+			if err != nil {
+				log.Warn(err)
+			}
 			continue
 		}
 
@@ -287,11 +290,19 @@ func (srv *sshServer) handleServerConn(ctx Context, chans <-chan ssh.NewChannel)
 
 				case "subsystem":
 					var payload = struct{ Value string }{}
-					ssh.Unmarshal(req.Payload, &payload)
+					err = ssh.Unmarshal(req.Payload, &payload)
+					if err != nil {
+						log.Warn(err)
+						return
+					}
 
 					handler, ok := srv.subsystemHandlers[payload.Value]
 					if !ok {
-						req.Reply(false, nil)
+						err = req.Reply(false, nil)
+						if err != nil {
+							log.Warn(err)
+							return
+						}
 						continue
 					}
 
@@ -300,14 +311,24 @@ func (srv *sshServer) handleServerConn(ctx Context, chans <-chan ssh.NewChannel)
 						defer sshCh.Close()
 						err := handler(ctx, srv, sshCh)
 						if err != nil {
+							log.Warn(err)
 							return
 						}
 					}()
 
-					req.Reply(true, nil)
+					err = req.Reply(true, nil)
+					if err != nil {
+						log.Warn(err)
+						return
+					}
 
 				default:
-					req.Reply(false, nil)
+					err = req.Reply(false, nil)
+					if err != nil {
+						log.Warn(err)
+						return
+					}
+
 					continue
 				}
 			}

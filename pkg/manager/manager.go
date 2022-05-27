@@ -107,7 +107,11 @@ func (m *Manager) start() error {
 		return err
 	}
 
-	m.sshServer.Start()
+	err = m.sshServer.Start()
+	if err != nil {
+		log.Warn(err)
+		return err
+	}
 
 	return nil
 }

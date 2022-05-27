@@ -33,10 +33,12 @@ func (s *TestSuite) TestO1Client(t *testing.T) {
 	control := mgr.GetController()
 
 	time.Sleep(waitPeriod * time.Second)
-	control.EditConfig()
+	err = control.EditConfig()
+	assert.NoError(t, err)
 
 	time.Sleep(waitPeriod * time.Second)
-	control.GetConfig()
+	_, err = control.GetConfig()
+	assert.NoError(t, err)
 
 	ctx, cancel := gnmiutils.MakeContext()
 	defer cancel()
