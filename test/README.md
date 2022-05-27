@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2022 2020-present Intel Corporation
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # How to run the integration tests
 
 ## Requirements
