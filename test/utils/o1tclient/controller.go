@@ -18,6 +18,8 @@ import (
 type Controller interface {
 	GetConfig() (string, error)
 	EditConfig() error
+	CloseSession() error
+	EndSession() error
 }
 
 type controller struct {
@@ -26,13 +28,14 @@ type controller struct {
 }
 
 func NewController(onosO1TAddress string) (Controller, error) {
-	log.Info("Starting Controller")
+	log.Info("Init")
 
 	session, err := createSession(onosO1TAddress)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Info("Starting Controller")
 	return &controller{
 		onosO1TAddress: onosO1TAddress,
 		session:        session,
@@ -125,6 +128,23 @@ func (c *controller) EditConfig() error {
 
 	err := c.session.AsyncRPC(e, defaultLogRpcReplyCallback(e.MessageID))
 	time.Sleep(200 * time.Millisecond)
+	return err
+}
+
+func (c *controller) CloseSession() error {
+	log.Info("Close Session")
+	e := new(CloseSession)
+	e.MessageID = NewUUID()
+	e.CloseSession = ""
+
+	err := c.session.AsyncRPC(e, defaultLogRpcReplyCallback(e.MessageID))
+	time.Sleep(200 * time.Millisecond)
+	return err
+}
+
+func (c *controller) EndSession() error {
+	log.Info("End")
+	err := c.session.Close()
 	return err
 }
 

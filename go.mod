@@ -10,7 +10,7 @@ require (
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/onosproject/helmit v0.6.19
-	github.com/onosproject/onos-api/go v0.9.11
+	github.com/onosproject/onos-api/go v0.9.17
 	github.com/onosproject/onos-config v0.10.34
 	github.com/onosproject/onos-lib-go v0.8.13
 	github.com/onosproject/onos-ric-sdk-go v0.8.9

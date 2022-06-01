@@ -76,7 +76,7 @@ func (m *Manager) startNorthboundServer() error {
 		true,
 		northbound.SecurityConfig{}))
 
-	s.AddService(cli.NewService(m.confStore, m.controller, m.rnibClient))
+	s.AddService(cli.NewService(m.confStore))
 
 	doneCh := make(chan error)
 	go func() {

@@ -30,7 +30,7 @@ func Hello(n *netconfSubsystem) error {
 	netconfCtx, cancel := context.WithTimeout(context.Background(), time.Duration(netconfTimeout)*time.Second)
 	defer cancel()
 
-	hello, err := n.srv.Handle(netconfCtx, []byte(helloRequest))
+	hello, err := n.srv.Handle(netconfCtx, n.ctx.SessionID(), []byte(helloRequest))
 	if err != nil {
 		log.Errorf("error create hello request: %v", err)
 		return err
@@ -47,7 +47,7 @@ func Hello(n *netconfSubsystem) error {
 
 func (n *netconfSubsystem) Serve() error {
 
-	log.Info("starting netconf subsystem")
+	log.Infof("starting netconf subsystem - user %s session %s", n.ctx.User(), n.ctx.SessionID())
 
 	err := Hello(n)
 	if err != nil {
@@ -56,9 +56,7 @@ func (n *netconfSubsystem) Serve() error {
 	}
 
 	for {
-
 		data, err := n.serverConn.receive()
-
 		if err != nil {
 			log.Debugf("handler read error: %s", err)
 			return err
@@ -67,7 +65,7 @@ func (n *netconfSubsystem) Serve() error {
 		netconfCtx, cancel := context.WithTimeout(context.Background(), time.Duration(netconfTimeout)*time.Second)
 		defer cancel()
 
-		reply, err := n.srv.Handle(netconfCtx, data)
+		reply, err := n.srv.Handle(netconfCtx, n.ctx.SessionID(), data)
 		if err != nil {
 			log.Infof("Serve decode error: %s", err)
 			return err
@@ -83,7 +81,13 @@ func (n *netconfSubsystem) Serve() error {
 
 	}
 
-	log.Info("finishing netconf subsystem")
+	log.Info("finishing netconf subsystem - session id %s", n.ctx.SessionID())
+
+	err = n.serverConn.Close()
+	if err != nil {
+		log.Debugf("conn close error: %s", err)
+	}
+
 	return nil
 }
 

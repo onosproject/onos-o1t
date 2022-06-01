@@ -25,7 +25,20 @@ limitations under the License.
 
 package o1tclient
 
-import "encoding/xml"
+import (
+	"crypto/rand"
+	"encoding/xml"
+	"fmt"
+	"io"
+)
+
+func NewUUID() string {
+	b := make([]byte, 16)
+	_, _ = io.ReadFull(rand.Reader, b)
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
 
 type RPC struct {
 	XMLName   xml.Name    `xml:"urn:ietf:params:xml:ns:netconf:base:1.1 rpc"`
@@ -90,4 +103,14 @@ type Hello struct {
 	XMLName      xml.Name `xml:"urn:ietf:params:xml:ns:netconf:base:1.1 hello"`
 	Capabilities []string `xml:"capabilities>capability"`
 	SessionID    int      `xml:"session-id,omitempty"`
+}
+
+type CloseSession struct {
+	RPC
+	CloseSession interface{} `xml:"close-session"`
+}
+
+type KillSession struct {
+	RPC
+	SessionID string `xml:"kill-session>session-id"`
 }
