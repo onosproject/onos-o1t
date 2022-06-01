@@ -62,28 +62,29 @@ type TargetsNames []TargetName
 type o1Controller struct {
 	capabilities []string
 	gnmiClient   southbound.GnmiClient
-	confStore    store.Store
+	Store        store.Store
 	rnibClient   rnib.TopoClient
 	GnmiTimeout  time.Duration
 }
 
 type O1Controller interface {
-	Handler(context.Context, []byte) ([]byte, error)
-	Get([]byte) ([]byte, error)
-	Set([]byte) ([]byte, error)
+	Handler(context.Context, string, []byte) ([]byte, error)
 }
 
-func NewO1Controller(confStore store.Store, rnibClient rnib.TopoClient, gnmiClient southbound.GnmiClient) O1Controller {
+func NewO1Controller(Store store.Store, rnibClient rnib.TopoClient, gnmiClient southbound.GnmiClient) O1Controller {
 
 	o1t := &o1Controller{
 		capabilities: []string{},
 		gnmiClient:   gnmiClient,
-		confStore:    confStore,
+		Store:        Store,
 		rnibClient:   rnibClient,
 		GnmiTimeout:  3 * time.Second,
 	}
 
-	_, err := o1t.Capabilities()
+	gnmiCtx, cancel := context.WithTimeout(context.Background(), o1t.GnmiTimeout)
+	defer cancel()
+
+	_, err := o1t.Capabilities(gnmiCtx)
 	if err != nil {
 		log.Warn(err)
 	}
@@ -91,22 +92,28 @@ func NewO1Controller(confStore store.Store, rnibClient rnib.TopoClient, gnmiClie
 	return o1t
 }
 
-func (o1 *o1Controller) Handler(ctx context.Context, rawMessage []byte) ([]byte, error) {
+func (o1 *o1Controller) Handler(ctx context.Context, sessionID string, rawMessage []byte) ([]byte, error) {
 	rawXML := string(rawMessage)
 	log.Infof("Decode received rawXML %s", rawXML)
 
 	switch {
 	case strings.Contains(rawXML, "<request-hello"):
-		hello, err := o1.buildHello(ctx)
+		hello, err := o1.Hello(ctx, sessionID)
 		return hello, err
+	case strings.Contains(rawXML, "<close"):
+		close, err := o1.CloseSession(ctx, sessionID)
+		return close, err
+	case strings.Contains(rawXML, "<kill"):
+		kill, err := o1.KillSession(ctx, sessionID)
+		return kill, err
 	case strings.Contains(rawXML, "<hello"):
 		// err := o1.Capabilities(rawMessage)
 		return nil, nil
 	case strings.Contains(rawXML, "<get-config"):
-		rawReply, err := o1.Get(rawMessage)
+		rawReply, err := o1.Get(ctx, sessionID, rawMessage)
 		return rawReply, err
 	case strings.Contains(rawXML, "<edit-config"):
-		rawReply, err := o1.Set(rawMessage)
+		rawReply, err := o1.Set(ctx, sessionID, rawMessage)
 		return rawReply, err
 	default:
 		log.Infof("Unknown message type received %s", rawXML)
@@ -114,20 +121,21 @@ func (o1 *o1Controller) Handler(ctx context.Context, rawMessage []byte) ([]byte,
 	}
 }
 
-func (o1 *o1Controller) Get(requestXML []byte) ([]byte, error) {
+func (o1 *o1Controller) Get(ctx context.Context, sessionID string, requestXML []byte) ([]byte, error) {
 	log.Info("Get")
 
-	request, err := ParseGetConfig(requestXML)
+	request, namespace, err := ParseGetConfig(requestXML)
 
 	if err != nil {
 		return nil, err
 	}
 
-	gnmiCtx, cancel := context.WithTimeout(context.Background(), o1.GnmiTimeout)
-	defer cancel()
-
-	response, err := o1.gnmiClient.Get(gnmiCtx, request)
-
+	response, err := o1.gnmiClient.Get(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	ns := fmt.Sprintf("%s:%s:%s", namespace.Target, namespace.Name, namespace.Version)
+	err = o1.UpdateStoreOperation(ctx, sessionID, "get-config", ns, true)
 	if err != nil {
 		return nil, err
 	}
@@ -143,20 +151,22 @@ func (o1 *o1Controller) Get(requestXML []byte) ([]byte, error) {
 	return reply, nil
 }
 
-func (o1 *o1Controller) Set(requestXML []byte) ([]byte, error) {
+func (o1 *o1Controller) Set(ctx context.Context, sessionID string, requestXML []byte) ([]byte, error) {
 	log.Infof("Set")
 
-	request, err := ParseEditConfig(requestXML, o1.capabilities)
+	request, namespace, err := ParseEditConfig(requestXML, o1.capabilities)
 
 	if err != nil {
 		return nil, err
 	}
 
-	gnmiCtx, cancel := context.WithTimeout(context.Background(), o1.GnmiTimeout)
-	defer cancel()
+	response, err := o1.gnmiClient.Set(ctx, request)
+	if err != nil {
+		return nil, err
+	}
 
-	response, err := o1.gnmiClient.Set(gnmiCtx, request)
-
+	ns := fmt.Sprintf("%s:%s:%s", namespace.Target, namespace.Name, namespace.Version)
+	err = o1.UpdateStoreOperation(ctx, sessionID, "edit-config", ns, true)
 	if err != nil {
 		return nil, err
 	}
@@ -171,13 +181,10 @@ func (o1 *o1Controller) Set(requestXML []byte) ([]byte, error) {
 	return reply, nil
 }
 
-func (o1 *o1Controller) Capabilities() ([]string, error) {
+func (o1 *o1Controller) Capabilities(ctx context.Context) ([]string, error) {
 	capabilities := []string{}
 
-	gnmiCtx, cancel := context.WithTimeout(context.Background(), o1.GnmiTimeout)
-	defer cancel()
-
-	configurables, err := o1.rnibClient.GetO1tConfigurables(gnmiCtx)
+	configurables, err := o1.rnibClient.GetO1tConfigurables(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -194,10 +201,10 @@ func (o1 *o1Controller) Capabilities() ([]string, error) {
 	return capabilities, nil
 }
 
-func (o1 *o1Controller) buildHello(ctx context.Context) ([]byte, error) {
+func (o1 *o1Controller) Hello(ctx context.Context, sessionID string) ([]byte, error) {
 	hello := new(Hello)
 
-	_, err := o1.Capabilities()
+	_, err := o1.Capabilities(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +216,47 @@ func (o1 *o1Controller) buildHello(ctx context.Context) ([]byte, error) {
 	}
 
 	log.Infof("build hello message %s", output)
+
+	err = o1.CreateStoreOperation(ctx, sessionID)
+	if err != nil {
+		log.Warn(err)
+	}
+
+	return output, nil
+
+}
+
+func (o1 *o1Controller) CloseSession(ctx context.Context, sessionID string) ([]byte, error) {
+	close := new(CloseSession)
+	close.CloseSession = ""
+	close.MessageID = NewUUID()
+
+	output, err := xml.Marshal(close)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("build close message %s", output)
+
+	err = o1.DeleteStoreOperation(ctx, sessionID)
+	if err != nil {
+		log.Warn(err)
+	}
+
+	return output, nil
+
+}
+
+func (o1 *o1Controller) KillSession(ctx context.Context, sessionID string) ([]byte, error) {
+	kill := new(KillSession)
+	kill.MessageID = NewUUID()
+	kill.SessionID = sessionID
+
+	output, err := xml.Marshal(kill)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("build kill message %s", output)
 
 	return output, nil
 
@@ -284,4 +332,78 @@ func GetResponseUpdate(gr *gnmi.GetResponse) (*gnmi.TypedValue, error) {
 	return &gnmi.TypedValue{
 		Value: u0.Val.Value,
 	}, nil
+}
+
+func (o1 *o1Controller) CreateStoreOperation(ctx context.Context, sessionID string) error {
+
+	key := store.Key{
+		SessionID: sessionID,
+	}
+
+	value := &store.SessionValue{
+		Alive:      true,
+		Operations: make(map[string]store.Operation),
+	}
+
+	log.Infof("Create store session %s", sessionID)
+	_, err := o1.Store.Put(ctx, key, value)
+	return err
+
+}
+
+func (o1 *o1Controller) DeleteStoreOperation(ctx context.Context, sessionID string) error {
+
+	key := store.Key{
+		SessionID: sessionID,
+	}
+
+	log.Infof("Delete store session %s", sessionID)
+	err := o1.Store.Delete(ctx, key)
+	return err
+
+}
+
+func (o1 *o1Controller) UpdateStoreOperation(ctx context.Context, sessionID, operation, namespace string, status bool) error {
+	log.Info("Update Store")
+
+	key := store.Key{
+		SessionID: sessionID,
+	}
+
+	entryValue := &store.SessionValue{
+		Alive:      true,
+		Operations: make(map[string]store.Operation),
+	}
+
+	entry, err := o1.Store.Get(ctx, key)
+	if err != nil {
+		log.Warn(err)
+	} else {
+		entryValue = entry.Value.(*store.SessionValue)
+	}
+
+	log.Infof("Entry value %+v", entryValue)
+
+	ops := entryValue.Operations
+
+	timestamp := time.Now()
+	newOp := store.Operation{
+		Name:      operation,
+		Namespace: namespace,
+		Status:    status,
+		Timestamp: uint64(timestamp.UnixNano()),
+	}
+	ops[timestamp.String()] = newOp
+
+	value := &store.SessionValue{
+		Alive:      true,
+		Operations: ops,
+	}
+
+	log.Infof("Update store session %s operation %s namespace %s status %v", sessionID, operation, namespace, status)
+	_, err = o1.Store.Update(ctx, key, value)
+	log.Infof("New Entry value %+v ", value)
+
+	return err
+
 }

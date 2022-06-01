@@ -17,19 +17,19 @@ var log = logging.GetLogger("store")
 
 type Store interface {
 	// Put puts the entry to the local store
-	Put(ctx context.Context, key interface{}, value interface{}) (*Entry, error)
+	Put(ctx context.Context, key Key, value interface{}) (*Entry, error)
 
 	// Get gets the entry from the local store
-	Get(ctx context.Context, key interface{}) (*Entry, error)
+	Get(ctx context.Context, key Key) (*Entry, error)
 
 	// Update updates the entry to the local store
-	Update(ctx context.Context, key interface{}, value interface{}) (*Entry, error)
+	Update(ctx context.Context, key Key, value interface{}) (*Entry, error)
 
 	// Delete deletes the entry from the local store
-	Delete(ctx context.Context, key interface{}) error
+	Delete(ctx context.Context, key Key) error
 
 	// Entries streams the entries from the local store through received go chan
-	Entries(ctx context.Context, ch chan<- *Entry)
+	Entries(ctx context.Context, ch chan<- *Entry) error
 
 	// Watch watches the event of this local store
 	Watch(ctx context.Context, ch chan<- Event) error
@@ -57,15 +57,13 @@ func (s *store) Print() {
 	defer s.mu.Unlock()
 	for k, v := range s.localStore {
 		switch v.Value.(type) {
-		case *SubscriptionValue:
-			log.Infof("Subscription store - Key: %v, value: %v", k.(SubscriptionKey), v.Value.(*SubscriptionValue))
-		case *O1Value:
-			log.Infof("A1PM store - Key: %v, value: %v", k.(O1Key), v.Value.(*O1Value))
+		case *SessionValue:
+			log.Infof("O1T store - session Key: %v, value: %v", k.(Key), v.Value.(*SessionValue))
 		}
 	}
 }
 
-func (s *store) Put(ctx context.Context, key interface{}, value interface{}) (*Entry, error) {
+func (s *store) Put(ctx context.Context, key Key, value interface{}) (*Entry, error) {
 	log.Infof("Creating store key %v", key)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -82,7 +80,7 @@ func (s *store) Put(ctx context.Context, key interface{}, value interface{}) (*E
 	return entry, nil
 }
 
-func (s *store) Update(ctx context.Context, key interface{}, value interface{}) (*Entry, error) {
+func (s *store) Update(ctx context.Context, key Key, value interface{}) (*Entry, error) {
 	log.Infof("Creating store key %v", key)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -99,7 +97,7 @@ func (s *store) Update(ctx context.Context, key interface{}, value interface{}) 
 	return entry, nil
 }
 
-func (s *store) Get(ctx context.Context, key interface{}) (*Entry, error) {
+func (s *store) Get(ctx context.Context, key Key) (*Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if v, ok := s.localStore[key]; ok {
@@ -108,7 +106,7 @@ func (s *store) Get(ctx context.Context, key interface{}) (*Entry, error) {
 	return nil, errors.NewNotFound("The entry does not exist")
 }
 
-func (s *store) Delete(ctx context.Context, key interface{}) error {
+func (s *store) Delete(ctx context.Context, key Key) error {
 	log.Infof("Deleting store key %v", key)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -125,14 +123,15 @@ func (s *store) Delete(ctx context.Context, key interface{}) error {
 	return nil
 }
 
-func (s *store) Entries(ctx context.Context, ch chan<- *Entry) {
+func (s *store) Entries(ctx context.Context, ch chan<- *Entry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if len(s.localStore) == 0 {
 		close(ch)
-		log.Error(errors.NewNotFound("There is no entry in the local store"))
-		return
+		err := errors.NewNotFound("There is no entry in the local store")
+		// log.Error()
+		return err
 	}
 
 	for _, entry := range s.localStore {
@@ -140,6 +139,7 @@ func (s *store) Entries(ctx context.Context, ch chan<- *Entry) {
 	}
 
 	close(ch)
+	return nil
 }
 
 func (s *store) Watch(ctx context.Context, ch chan<- Event) error {

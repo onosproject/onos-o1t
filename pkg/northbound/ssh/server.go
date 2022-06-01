@@ -113,7 +113,7 @@ var DefaultSubsystemHandlers = map[string]SubsystemHandler{
 type SSHServer interface {
 	Start() error
 	Stop(ctx context.Context) error
-	Handle(context.Context, []byte) ([]byte, error)
+	Handle(context.Context, string, []byte) ([]byte, error)
 }
 
 type sshServer struct {
@@ -180,8 +180,8 @@ func NewSSHServer(netconfPort int, o1tControl controller.O1Controller) (SSHServe
 	return srv, nil
 }
 
-func (srv *sshServer) Handle(ctx context.Context, request []byte) ([]byte, error) {
-	reply, err := srv.controller.Handler(ctx, request)
+func (srv *sshServer) Handle(ctx context.Context, sessionID string, request []byte) ([]byte, error) {
+	reply, err := srv.controller.Handler(ctx, sessionID, request)
 	return reply, err
 }
 
@@ -228,9 +228,6 @@ func (srv *sshServer) config(ctx Context) *ssh.ServerConfig {
 }
 
 func (srv *sshServer) Start() error {
-	ctx, _ := newContext(srv)
-	config := srv.config(ctx)
-
 	address := "0.0.0.0:" + strconv.Itoa(srv.netconfPort)
 	listener, err := net.Listen("tcp", address)
 
@@ -249,12 +246,16 @@ func (srv *sshServer) Start() error {
 			return err
 		}
 
-		_, chans, reqs, err := ssh.NewServerConn(conn, config)
+		ctx, _ := newContext(srv)
+		config := srv.config(ctx)
+
+		srvConn, chans, reqs, err := ssh.NewServerConn(conn, config)
 		if err != nil {
 			log.Error(err)
 			return err
 		}
 
+		fillContext(ctx, srvConn)
 		go ssh.DiscardRequests(reqs)
 		go srv.handleServerConn(ctx, chans)
 	}

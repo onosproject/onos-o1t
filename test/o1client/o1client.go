@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	waitPeriod                = time.Duration(1)
+	waitPeriod                = time.Duration(2)
 	reportPeriodIntervalValue = "5000"
 	reportPeriodInterval      = "/report_period/interval"
 	targetName                = "kpimon"
@@ -55,6 +55,12 @@ func (s *TestSuite) TestO1Client(t *testing.T) {
 		Encoding:   gnmiapi.Encoding_PROTO,
 	}
 	getReq.CheckValues(t, reportPeriodIntervalValue)
+
+	err = control.CloseSession()
+	assert.NoError(t, err)
+
+	err = control.EndSession()
+	assert.NoError(t, err)
 
 	t.Log("O1T client suite test finished")
 }

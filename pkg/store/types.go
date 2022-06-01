@@ -4,10 +4,8 @@
 
 package store
 
-import topoapi "github.com/onosproject/onos-api/go/onos/topo"
-
 type Entry struct {
-	Key   interface{}
+	Key   Key
 	Value interface{}
 }
 
@@ -36,30 +34,20 @@ func (e EventType) String() string {
 	return [...]string{"None", "Created", "Update", "Deleted"}[e]
 }
 
-// For service definition
-
-type O1ServiceType struct {
-	TypeID string
+// For operation definitions
+type Operation struct {
+	Name      string
+	Timestamp uint64
+	Namespace string
+	Status    bool
 }
 
-// For subscription manager
-
-type SubscriptionKey struct {
-	TargetID topoapi.ID
+// For O1 - session mapping
+type Key struct {
+	SessionID string
 }
 
-type SubscriptionValue struct {
-	O1TargetCapabilities []*O1ServiceType
-}
-
-// For O1 - target mapping
-
-type O1Key struct {
-	TargetID topoapi.ID
-}
-
-type O1Target string
-
-type O1Value struct {
-	O1Targets map[O1Target]O1ServiceType
+type SessionValue struct {
+	Alive      bool
+	Operations map[string]Operation
 }

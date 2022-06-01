@@ -47,32 +47,30 @@ func parseNamespace(ns string) (Namespace, error) {
 	}, nil
 }
 
-func ParseGetConfig(requestXML []byte) (*gnmi.GetRequest, error) {
+func ParseGetConfig(requestXML []byte) (*gnmi.GetRequest, Namespace, error) {
+	gnmiGet := new(gnmi.GetRequest)
 
 	request := new(GetConfig)
 	err := xml.Unmarshal([]byte(requestXML), request)
 	if err != nil {
-		return nil, err
-	}
-
-	log.Infof("parsed get config xml")
-
-	gnmiGet := new(gnmi.GetRequest)
-
-	if request.Filter.Type != "xpath" {
-		return gnmiGet, fmt.Errorf("get-config filter must be xpath")
-	}
-
-	gnmiGet.Path = make([]*gnmi.Path, 1)
-	elems := []*gnmi.PathElem{}
-	gnmiGet.Prefix = &gnmi.Path{
-		Elem: elems,
+		return gnmiGet, Namespace{}, err
 	}
 
 	namespace := request.Filter.XMLNS
 	ns, err := parseNamespace(namespace)
 	if err != nil {
-		return gnmiGet, err
+		return gnmiGet, Namespace{}, err
+	}
+
+	if request.Filter.Type != "xpath" {
+		return gnmiGet, ns, fmt.Errorf("get-config filter must be xpath")
+	}
+
+	gnmiGet.Path = make([]*gnmi.Path, 1)
+	elems := []*gnmi.PathElem{}
+	gnmiGet.Prefix = &gnmi.Path{
+		Elem:   elems,
+		Target: ns.Target,
 	}
 
 	xpathTarget := request.Filter.Select
@@ -86,13 +84,13 @@ func ParseGetConfig(requestXML []byte) (*gnmi.GetRequest, error) {
 
 	getPath, err := gnxi.ToGNMIPath(xpathTarget)
 	if err != nil {
-		return nil, err
+		return nil, ns, err
 	}
 
 	getPath.Target = ns.Target
 	gnmiGet.Path[0] = getPath
 
-	return gnmiGet, nil
+	return gnmiGet, ns, nil
 }
 
 func RemoveAttr(n *xj.Node) {
@@ -130,13 +128,17 @@ func getNamespace(request *EditConfig, capabilities []string) (Namespace, error)
 	return ns, nil
 }
 
-func ParseEditConfig(requestXML []byte, capabilities []string) (*gnmi.SetRequest, error) {
+func ParseEditConfig(requestXML []byte, capabilities []string) (*gnmi.SetRequest, Namespace, error) {
 	gnmiSet := new(gnmi.SetRequest)
 
 	request := new(EditConfig)
 	err := xml.Unmarshal([]byte(requestXML), request)
 	if err != nil {
-		return nil, err
+		return gnmiSet, Namespace{}, err
+	}
+	namespace, err := getNamespace(request, capabilities)
+	if err != nil {
+		return gnmiSet, Namespace{}, err
 	}
 
 	xml := strings.NewReader(request.Config.Config)
@@ -148,7 +150,7 @@ func ParseEditConfig(requestXML []byte, capabilities []string) (*gnmi.SetRequest
 		xj.WithAttrPrefix("-"),
 	).Decode(root)
 	if err != nil {
-		return nil, err
+		return nil, Namespace{}, err
 	}
 
 	RemoveAttr(root)
@@ -158,12 +160,7 @@ func ParseEditConfig(requestXML []byte, capabilities []string) (*gnmi.SetRequest
 	e := xj.NewEncoder(jsonVal)
 	err = e.Encode(root)
 	if err != nil {
-		return nil, err
-	}
-
-	namespace, err := getNamespace(request, capabilities)
-	if err != nil {
-		return nil, err
+		return nil, Namespace{}, err
 	}
 
 	elems := []*gnmi.PathElem{}
@@ -187,6 +184,6 @@ func ParseEditConfig(requestXML []byte, capabilities []string) (*gnmi.SetRequest
 	gnmiSet.Update = updates
 	gnmiSet.Delete = deletes
 
-	return gnmiSet, nil
+	return gnmiSet, namespace, nil
 
 }
