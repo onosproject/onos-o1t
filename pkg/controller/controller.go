@@ -32,6 +32,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/onosproject/onos-lib-go/pkg/errors"
+
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-o1t/pkg/rnib"
 	"github.com/onosproject/onos-o1t/pkg/southbound"
@@ -124,27 +126,32 @@ func (o1 *o1Controller) Handler(ctx context.Context, sessionID string, rawMessag
 func (o1 *o1Controller) Get(ctx context.Context, sessionID string, requestXML []byte) ([]byte, error) {
 	log.Info("Get")
 
+	var reply []byte
+	var response *gnmi.GetResponse
+
 	request, namespace, err := ParseGetConfig(requestXML)
 
 	if err != nil {
-		return nil, err
-	}
+		reply, err = o1.buildGetReply(requestXML, response, err)
+		if err != nil {
+			return nil, err
+		}
 
-	response, err := o1.gnmiClient.Get(ctx, request)
-	if err != nil {
-		return nil, err
-	}
-	ns := fmt.Sprintf("%s:%s:%s", namespace.Target, namespace.Name, namespace.Version)
-	err = o1.UpdateStoreOperation(ctx, sessionID, "get-config", ns, true)
-	if err != nil {
-		return nil, err
-	}
+	} else {
+		response, gnmiErr := o1.gnmiClient.Get(ctx, request)
 
-	log.Infof(response.String())
+		ns := fmt.Sprintf("%s:%s:%s", namespace.Target, namespace.Name, namespace.Version)
+		err = o1.UpdateStoreOperation(ctx, sessionID, "get-config", ns, gnmiErr)
+		if err != nil {
+			return nil, err
+		}
 
-	reply, err := o1.buildGetReply(requestXML, response)
-	if err != nil {
-		return nil, err
+		log.Infof(response.String())
+
+		reply, err = o1.buildGetReply(requestXML, response, gnmiErr)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	log.Infof("get reply %s", string(reply))
@@ -154,27 +161,30 @@ func (o1 *o1Controller) Get(ctx context.Context, sessionID string, requestXML []
 func (o1 *o1Controller) Set(ctx context.Context, sessionID string, requestXML []byte) ([]byte, error) {
 	log.Infof("Set")
 
+	var reply []byte
+	var response *gnmi.GetResponse
+
 	request, namespace, err := ParseEditConfig(requestXML, o1.capabilities)
 
 	if err != nil {
-		return nil, err
-	}
+		reply, err = o1.buildGetReply(requestXML, response, err)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		response, gnmiErr := o1.gnmiClient.Set(ctx, request)
 
-	response, err := o1.gnmiClient.Set(ctx, request)
-	if err != nil {
-		return nil, err
-	}
+		ns := fmt.Sprintf("%s:%s:%s", namespace.Target, namespace.Name, namespace.Version)
+		err = o1.UpdateStoreOperation(ctx, sessionID, "edit-config", ns, gnmiErr)
+		if err != nil {
+			return nil, err
+		}
 
-	ns := fmt.Sprintf("%s:%s:%s", namespace.Target, namespace.Name, namespace.Version)
-	err = o1.UpdateStoreOperation(ctx, sessionID, "edit-config", ns, true)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Infof(response.String())
-	reply, err := o1.buildEditReply(requestXML, response)
-	if err != nil {
-		return nil, err
+		log.Infof(response.String())
+		reply, err = o1.buildEditReply(requestXML, response, gnmiErr)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	log.Infof("edit reply %s", string(reply))
@@ -262,29 +272,39 @@ func (o1 *o1Controller) KillSession(ctx context.Context, sessionID string) ([]by
 
 }
 
-//TODO build message using xml go structure of the model referenced by the target
-func (o1 *o1Controller) buildGetReply(requestXML []byte, response *gnmi.GetResponse) ([]byte, error) {
+func (o1 *o1Controller) buildGetReply(requestXML []byte, response *gnmi.GetResponse, gnmiErr error) ([]byte, error) {
 
 	request := new(GetConfig)
+
 	err := xml.Unmarshal([]byte(requestXML), request)
 	if err != nil {
 		return nil, err
 	}
 
-	value, err := GetResponseUpdate(response)
-	if err != nil {
-		return nil, err
-	}
-
-	valTmp := value.Value.(*gnmi.TypedValue_JsonVal).JsonVal
-	xmlVal, err := xml.Marshal(string(valTmp))
-	if err != nil {
-		return nil, err
-	}
-
 	reply := new(RPCReply)
-	reply.Data = string(xmlVal)
 	reply.MessageID = request.MessageID
+
+	if gnmiErr != nil {
+		status := errors.Status(gnmiErr)
+		rpcError := new(RPCError)
+		rpcError.Type = status.Code().String()
+		rpcError.Message = status.Message()
+		reply.Errors = append(reply.Errors, *rpcError)
+	} else {
+		value, err := GetResponseUpdate(response)
+		if err != nil {
+			return nil, err
+		}
+
+		//TODO build message using xml go structure of the model referenced by the target
+		valTmp := value.Value.(*gnmi.TypedValue_JsonVal).JsonVal
+		xmlVal, err := xml.Marshal(string(valTmp))
+		if err != nil {
+			return nil, err
+		}
+
+		reply.Data = string(xmlVal)
+	}
 
 	output, err := xml.Marshal(reply)
 	if err != nil {
@@ -297,8 +317,7 @@ func (o1 *o1Controller) buildGetReply(requestXML []byte, response *gnmi.GetRespo
 
 }
 
-//TODO build rpc-error in case of error in Set
-func (o1 *o1Controller) buildEditReply(requestXML []byte, response *gnmi.SetResponse) ([]byte, error) {
+func (o1 *o1Controller) buildEditReply(requestXML []byte, response *gnmi.SetResponse, gnmiErr error) ([]byte, error) {
 	request := new(EditConfig)
 	err := xml.Unmarshal([]byte(requestXML), request)
 	if err != nil {
@@ -306,8 +325,17 @@ func (o1 *o1Controller) buildEditReply(requestXML []byte, response *gnmi.SetResp
 	}
 
 	reply := new(RPCReply)
-	reply.Data = "<ok/>"
 	reply.MessageID = request.MessageID
+
+	if gnmiErr != nil {
+		status := errors.Status(gnmiErr)
+		rpcError := new(RPCError)
+		rpcError.Type = status.Code().String()
+		rpcError.Message = status.Message()
+		reply.Errors = append(reply.Errors, *rpcError)
+	} else {
+		reply.Data = "<ok/>"
+	}
 
 	output, err := xml.Marshal(reply)
 	if err != nil {
@@ -363,8 +391,13 @@ func (o1 *o1Controller) DeleteStoreOperation(ctx context.Context, sessionID stri
 
 }
 
-func (o1 *o1Controller) UpdateStoreOperation(ctx context.Context, sessionID, operation, namespace string, status bool) error {
+func (o1 *o1Controller) UpdateStoreOperation(ctx context.Context, sessionID, operation, namespace string, gnmiErr error) error {
 	log.Info("Update Store")
+
+	status := true
+	if gnmiErr != nil {
+		status = false
+	}
 
 	key := store.Key{
 		SessionID: sessionID,
