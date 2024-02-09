@@ -44,6 +44,18 @@ jobs:
           go test -race github.com/onosproject/onos-o1t/pkg/...
           go test -race github.com/onosproject/onos-o1t/cmd/...
 
+  protos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: protos
+        run: |
+          docker run \
+            -v `pwd`:/go/src/github.com/onosproject/onos-o1t \
+            -w /go/src/github.com/onosproject/onos-o1t \
+            --entrypoint build/bin/compile-protos.sh \
+            onosproject/protoc-go:v0.6.4
+
   docker-build:
     runs-on: ubuntu-latest
     steps:
@@ -69,8 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
- 
       - name: FOSSA scan
-        uses: fossas/fossa-action@main
+        uses: fossa-contrib/fossa-action@v3
         with:
-          api-key: ${{secrets.fossaApiKey}}
+          fossa-api-key: 6d304c09a3ec097ba4517724e4a4d17d
