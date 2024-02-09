@@ -44,9 +44,6 @@ jobs:
           go test -race github.com/onosproject/onos-o1t/pkg/...
 	  go test -race github.com/onosproject/onos-o1t/cmd/...
 
-env:
-  ONOS_PROTOC_VERSION: v0.6.4
-
 jobs:
   protos:
     runs-on: ubuntu-latest
@@ -58,7 +55,7 @@ jobs:
             -v `pwd`:/go/src/github.com/onosproject/onos-o1t \
             -w /go/src/github.com/onosproject/onos-o1t \
             --entrypoint build/bin/compile-protos.sh \
-            onosproject/protoc-go:${ONOS_PROTOC_VERSION}
+            onosproject/protoc-go:v0.6.4
 
   docker-build:
     runs-on: ubuntu-latest
