@@ -42,9 +42,11 @@ jobs:
       - name: Unit tests
         run: |
           go test -race github.com/onosproject/onos-o1t/pkg/...
-	  go test -race github.com/onosproject/onos-o1t/cmd/...
+	        go test -race github.com/onosproject/onos-o1t/cmd/...
 
-jobs:
+env:
+  ONOS_PROTOC_VERSION: v0.6.4
+
   protos:
     runs-on: ubuntu-latest
     steps:
@@ -55,7 +57,7 @@ jobs:
             -v `pwd`:/go/src/github.com/onosproject/onos-o1t \
             -w /go/src/github.com/onosproject/onos-o1t \
             --entrypoint build/bin/compile-protos.sh \
-            onosproject/protoc-go:v0.6.4
+            onosproject/protoc-go:${ONOS_PROTOC_VERSION}
 
   docker-build:
     runs-on: ubuntu-latest
