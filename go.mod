@@ -15,10 +15,10 @@ require (
 	github.com/onosproject/onos-lib-go v0.8.13
 	github.com/onosproject/onos-ric-sdk-go v0.8.9
 	github.com/onosproject/onos-test v0.6.6
-	github.com/openconfig/gnmi v0.0.0-20220503232738-6eb133c65a13
+	github.com/openconfig/gnmi v0.11.0
 	github.com/openshift-telco/go-netconf-client v0.0.0-20211201160131-f3f08f0df531
 	github.com/rogpeppe/go-internal v1.8.0 // indirect
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29
+	golang.org/x/crypto v0.19.0
 	google.golang.org/grpc v1.46.0
 )
