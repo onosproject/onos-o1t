@@ -16,7 +16,7 @@ COPY build/build-tools /go/src/github.com/onosproject/onos-o1t/build/build-tools
 
 RUN cd /go/src/github.com/onosproject/onos-o1t && GOFLAGS=-mod=vendor make ${ONOS_MAKE_TARGET}
 
-FROM alpine:3.11
+FROM alpine:3.20
 RUN apk add libc6-compat
 
 USER nobody
